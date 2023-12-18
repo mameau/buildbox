@@ -1,0 +1,55 @@
+#!/bin/bash
+
+. buildbox_defs
+
+export CC=/usr/bin/clang-17
+export CXX=/usr/bin/clang++-17
+
+BASE=$HOME/devel/redumper
+BUILD_DIR=${BASE}
+BUILD_TYPE=Release
+ARM=1
+
+BUILDBOXDIR=$BUILDBOXDIR/redumper
+
+[ ! -d ${BUILD_DIR} ] && mkdir ${BUILD_DIR}
+cd ${BUILD_DIR}
+
+if [ $ARM -eq 1 ]
+then
+
+  git clean -dxf
+  git checkout main
+  git pull
+  #VERSION=$(git tag | cut -d'_' -f2 | sort -n | head -n-1 | tail -n1)
+  VERSION=$(git rev-list --tags -n1)
+  VERSION=$(git describe --tag)
+  [ ! -z "$VERSION" ] && git checkout ${VERSION}
+  RELVER=$(echo $VERSION | sed -r 's/_//g')
+  OUTDIR=$BUILDBOXDIR
+  [ ! -d "${OUTDIR}" ] && mkdir -p "${OUTDIR}"
+  OUTPUT=${OUTDIR}/redumper-${RELVER}-linux-$(uname -m).zip
+
+  [ -f $OUTPUT ] && echo "Build already exists, exiting" && exit 1
+
+  #config
+  cmake -B ${BUILD_DIR} -G "Ninja" -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON -DCMAKE_BUILD_TYPE=${BUILD_TYPE} -DREDUMPER_CLANG_LINK_OPTIONS="-static"
+
+  #build
+  cmake --build ${BUILD_DIR} --config ${BUILD_TYPE}
+
+  #test
+  ctest -C ${BUILD_TYPE}
+
+  #pack
+  cpack -G ZIP --config CPackConfig.cmake
+
+  RELEASE=$(find -maxdepth 1 -iname "redumper-*-Linux.zip")
+  FILENAME=$(echo $RELEASE | sed -r 's/\-Linux\.zip$//g')
+
+  #echo $FILENAME
+  #echo $OUTPUT
+  mv $RELEASE "${OUTPUT}"
+
+fi
+

@@ -1,0 +1,58 @@
+#!/bin/bash
+
+. buildbox_defs
+
+set -x
+
+RELEASE=~/volumes/mame-RELEASE
+LATESTTAG=""
+FNSX=-$(uname -s | tr [A-Z] [a-z])-$(uname -m).zip
+
+BUILDBOXDIR=$BUILDBOXDIR/mame
+
+check_latest() {
+  cd ${RELEASE}/mame
+  git clean -dxf
+  git checkout master
+  LATESTTAG="$(git describe --tags $(git rev-list --tags -n1))"
+  if [ -f $BUILDBOXDIR/${LATESTTAG}${FNSX} ]
+  then
+    echo "build already exists, exiting"
+    return 1
+  else
+    return 0
+  fi
+}
+
+handle_release() {
+
+  BASE=${RELEASE}/games
+  LATEST=$(ls -lad $BASE/emulator-mame* | awk '{print $9}' | tail -n1)
+
+  if [ ! -z $LATEST ]
+  then
+    cd $(dirname $LATEST)
+    VERSION=$(basename $(echo $LATEST) | sed 's/^emulator-mame/0/')
+    ZIPFILE=mame${VERSION}${FNSX}.zip
+    [ -f $BASEBOXDIR/$ZIPFILE ] && echo "Build alread exists, exiting" && exit 1
+
+    if [ ! -z $VERSION ]
+    then
+      ln -sfT $LATEST mame
+      if [ -L mame ]
+      then
+        zip -r9 $ZIPFILE mame/
+        [ -f $ZIPFILE ] && mv $ZIPFILE $BUILDBOXDIR/
+      fi
+      [ -L mame ] && rm mame
+    fi
+  fi
+}
+
+check_latest
+if [ $? -eq 0 ]
+then
+  cd $HOME/devel/mame-build
+  ./run_container_RELEASE
+  handle_release
+fi
